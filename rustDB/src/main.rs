@@ -63,9 +63,20 @@ fn main() {
             }
             "list" => {
                 println!("Current database content:");
+                let data = db.list_all();
+                if data.is_empty() {
+                    println!("No data found");
+                } else {
+                    println!("{{");
+                    for (key, value) in data {
+                        println!("  {}: {},", key, value);
+                    }
+                    println!("}}");
+                }
             }
             "clear" => {
                 println!("Deleting the database");
+                db.clear();
             }
             "help" => {
                 println!("Commands:");

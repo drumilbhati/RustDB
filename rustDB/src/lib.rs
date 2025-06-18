@@ -92,4 +92,15 @@ impl RustDb {
             Err(RustDbError::KeyNotFound)
         }
     }
+
+    pub fn list_all(&self) -> Vec<(String, String)> {
+        self.data
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
 }
