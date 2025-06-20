@@ -29,13 +29,10 @@ impl From<serde_json::Error> for RustDbError {
     }
 }
 
-// Document custom type
-pub type Document = serde_json::Value;
-
 // Database Struct
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RustDb {
-    collections: HashMap<String, HashMap<String, Document>>,
+    data: HashMap<String, String>,
     file_path: PathBuf,
 }
 
@@ -45,16 +42,14 @@ impl RustDb {
     pub fn new(file_path: &str) -> Result<Self, RustDbError> {
         let path = PathBuf::from(file_path);
         let mut db = RustDb {
-            collections: HashMap::new(),
+            data: HashMap::new(),
             file_path: path,
         };
-
-        // try to load the database initially into the hashmap
         match db.load() {
             Ok(_) => Ok(db),
             Err(RustDbError::IoError(ref err)) if err.kind() == io::ErrorKind::NotFound => {
                 println!(
-                    "Database file not found. Creating a new database at {}.",
+                    "Database file not found. Creating a new database at {}",
                     file_path
                 );
                 Ok(db)
@@ -63,85 +58,49 @@ impl RustDb {
         }
     }
 
-    // load the data from file_path to hashmap
     fn load(&mut self) -> Result<(), RustDbError> {
         let content = fs::read_to_string(&self.file_path)?;
         if content.trim().is_empty() {
-            self.collections = HashMap::new();
+            self.data = HashMap::new();
         } else {
-            self.collections = serde_json::from_str(&content)?;
+            self.data = serde_json::from_str(&content)?;
         }
         Ok(())
     }
 
-    // insert a new document to a document
-    pub fn insert_document(
-        &mut self,
-        collection_name: String,
-        document_id: String,
-        document: Document,
-    ) -> Result<(), RustDbError> {
-        self.collections
-            .entry(collection_name)
-            .or_default()
-            .insert(document_id, document);
+    pub fn insert(&mut self, key: String, value: String) -> Result<(), RustDbError> {
+        self.data.insert(key, value);
         self.save()?;
         Ok(())
     }
 
-    // save the hashmap to a json file
     pub fn save(&self) -> Result<(), RustDbError> {
-        let serialized = serde_json::to_string_pretty(&self.collections)?;
+        let serialized = serde_json::to_string_pretty(&self.data)?;
         fs::write(&self.file_path, serialized.as_bytes())?;
         Ok(())
     }
 
-    // Get a document from a collection
-    pub fn get_document(&self, collection_name: &str, document_id: &str) -> Option<&Document> {
-        self.collections
-            .get(collection_name)
-            .and_then(|collection| collection.get(document_id))
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.data.get(key)
     }
 
-    // Delete a document from a collection
-    pub fn delete_document(
-        &mut self,
-        collection_name: &str,
-        document_id: &str,
-    ) -> Result<(), RustDbError> {
-        if let Some(collection) = self.collections.get_mut(collection_name) {
-            if collection.remove(document_id).is_some() {
-                self.save()?;
-                Ok(())
-            } else {
-                // Document not found
-                Err(RustDbError::KeyNotFound)
-            }
+    pub fn delete(&mut self, key: &str) -> Result<(), RustDbError> {
+        if self.data.remove(key).is_some() {
+            self.save()?;
+            Ok(())
         } else {
-            // collection not found
             Err(RustDbError::KeyNotFound)
         }
     }
 
-    // List all documents in a collection
-    pub fn list_collection_documents(&self, collection_name: &str) -> Vec<(String, Document)> {
-        self.collections
-            .get(collection_name)
-            .map(|collection| {
-                collection
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
+    pub fn list_all(&self) -> Vec<(String, String)> {
+        self.data
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
-    // Clear a specific collection
-    pub fn clear_collections(&mut self, collection_name: &str) -> Result<(), RustDbError> {
-        if let Some(collection) = self.collections.get_mut(collection_name) {
-            collection.clear()
-        }
-        self.save()?;
-        Ok(())
+    pub fn clear(&mut self) {
+        self.data.clear();
     }
 }
