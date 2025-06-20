@@ -130,7 +130,7 @@ fn main() {
                     } else {
                         println!("{{");
                         for (id, doc) in data {
-                            println!("  {}: \n      {}", id, doc.to_string());
+                            println!("  {}:\n      {}", id, doc.to_string());
                         }
                         println!("}}")
                     }
