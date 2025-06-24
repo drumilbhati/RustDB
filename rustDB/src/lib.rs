@@ -1,7 +1,8 @@
+use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs;
-use std::io;
+use std::fs::{self, OpenOptions};
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 // Custom error type
@@ -34,6 +35,7 @@ impl From<serde_json::Error> for RustDbError {
 pub struct RustDb {
     data: HashMap<String, String>,
     file_path: PathBuf,
+    log_path: PathBuf,
 }
 
 // Implement methods
@@ -43,10 +45,15 @@ impl RustDb {
         let path = PathBuf::from(file_path);
         let mut db = RustDb {
             data: HashMap::new(),
-            file_path: path,
+            file_path: path.clone(),
+            log_path: path.with_extension("wal"),
         };
         match db.load() {
-            Ok(_) => Ok(db),
+            Ok(_) => {
+                // replay any remaining logs
+                db.replay_log()?;
+                Ok(db)
+            }
             Err(RustDbError::IoError(ref err)) if err.kind() == io::ErrorKind::NotFound => {
                 println!(
                     "Database file not found. Creating a new database at {}",
@@ -68,7 +75,20 @@ impl RustDb {
         Ok(())
     }
 
+    fn write_log(&self, entry: &str) -> Result<(), RustDbError> {
+        // create a file "object"
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.log_path)?;
+
+        // append to the file the log_entry
+        writeln!(file, "{}", entry)?;
+        Ok(())
+    }
+
     pub fn insert(&mut self, key: String, value: String) -> Result<(), RustDbError> {
+        self.write_log(&format!("insert {} {}", key, value))?;
         self.data.insert(key, value);
         self.save()?;
         Ok(())
@@ -85,12 +105,32 @@ impl RustDb {
     }
 
     pub fn delete(&mut self, key: &str) -> Result<(), RustDbError> {
+        self.write_log(&format!("delete {}", key))?;
         if self.data.remove(key).is_some() {
             self.save()?;
             Ok(())
         } else {
             Err(RustDbError::KeyNotFound)
         }
+    }
+
+    fn replay_log(&mut self) -> Result<(), RustDbError> {
+        if let Ok(content) = fs::read_to_string(&self.log_path) {
+            for line in content.lines() {
+                let parts: Vec<&str> = line.splitn(3, ' ').collect();
+
+                match parts.as_slice() {
+                    ["insert", key, value] => {
+                        self.data.insert(key.to_string(), value.to_string());
+                    }
+                    ["delete", key] => {
+                        self.data.remove(*key);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn list_all(&self) -> Vec<(String, String)> {
