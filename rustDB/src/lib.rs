@@ -1,4 +1,3 @@
-use serde::de::IntoDeserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -52,6 +51,7 @@ impl RustDb {
             Ok(_) => {
                 // replay any remaining logs
                 db.replay_log()?;
+                db.clear_log()?;
                 Ok(db)
             }
             Err(RustDbError::IoError(ref err)) if err.kind() == io::ErrorKind::NotFound => {
@@ -130,6 +130,11 @@ impl RustDb {
                 }
             }
         }
+        Ok(())
+    }
+
+    fn clear_log(&mut self) -> Result<(), RustDbError> {
+        fs::write(&self.log_path, "")?;
         Ok(())
     }
 
