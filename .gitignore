@@ -14,3 +14,4 @@ Cargo.lock
 *.pdb
 rustDB/my_db.json
 rustDB/my_db.wal
+GEMINI.md
