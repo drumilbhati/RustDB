@@ -1,68 +1,53 @@
-# RustDB System Architecture
+# RustDB Architecture (Redis-like)
 
-This document describes the high-level architecture of RustDB. The design is modular to ensure it is easy to understand, test, and extend.
+RustDB is a high-performance in-memory key-value store with integrated disk persistence.
 
-## 🏗️ High-Level Overview
+## 🏗️ High-Level Design
 
-RustDB follows a layered architecture similar to SQLite, where each layer has a specific responsibility.
+The architecture is centered around an **In-Memory Store** that serves all read/write requests, with a background **Persistence Layer** that ensures durability.
 
 ```mermaid
 graph TD
-    A[User / REPL] --> B[Parser / Tokenizer]
-    B --> C[Virtual Machine / Executor]
-    C --> D[Storage Engine]
-    D --> E[In-Memory Cache / HashMap]
-    D --> F[Disk Storage / Pager]
+    A[Client / REPL] --> B[Command Parser]
+    B --> C[Execution Engine]
+    C --> D[In-Memory Store]
+    D --> E[AOF Logger]
+    D --> F[RDB Snapshorter]
+    E --> G[appendonly.aof]
+    F --> H[dump.rdb]
 ```
 
 ---
 
-## 🧩 Core Components
+## 🧩 Components
 
-### 1. Front-end: The REPL (Read-Eval-Print Loop)
-- **Responsibility:** The interface between the user and the database.
-- **Workflow:** Reads a line from `stdin`, sends it to the Parser, and prints the result or error message back to the user.
-- **Rust Concepts:** `std::io`, `match` expressions, infinite loops.
+### 1. In-Memory Store
+- **Data Structure:** A `HashMap` where keys are `Strings` and values are a custom `Value` enum (supporting String, List, Set, etc.).
+- **Performance:** O(1) average time complexity for most operations.
 
-### 2. The Parser & Tokenizer
-- **Responsibility:** Translates raw string input into structured commands that the database understands.
-- **Commands:**
-    - **Meta-commands:** Commands starting with a dot (e.g., `.exit`, `.help`).
-    - **SQL-like Statements:** Commands like `INSERT`, `SELECT`, `GET`, `SET`.
-- **Output:** An `Enum` (e.g., `StatementType`) representing the action and its parameters.
-- **Rust Concepts:** Enums, `String` manipulation, `Result` type.
+### 2. Persistence Layer
+RustDB uses two methods for persistence:
+- **Append Only File (AOF):** Logs every write operation. It is high-durability but can grow large.
+- **RDB Snapshotting:** Periodically saves a point-in-time binary representation of the dataset. It is fast to load but less frequent than AOF.
 
-### 3. The Virtual Machine (VM) / Executor
-- **Responsibility:** The "brain" of the database. It takes the parsed statement and determines how to execute it by calling the appropriate methods on the Storage Engine.
-- **Workflow:** If the statement is an `INSERT`, it tells the Storage Engine to store the data.
-- **Rust Concepts:** Pattern matching, error propagation.
-
-### 4. Storage Engine
-- **Responsibility:** Manages how data is organized and retrieved.
-- **Sub-components:**
-    - **Memory Backend:** Initially a `HashMap<String, String>` for Phase 2.
-    - **Table Manager:** Manages fixed-size rows and schemas (Phase 4).
-    - **Pager (Future):** Manages reading/writing fixed-size pages (e.g., 4KB) to disk.
-- **Rust Concepts:** `HashMap`, `Vec`, Structs, Traits.
-
-### 5. Persistence Layer (Disk)
-- **Responsibility:** Ensures data durability.
-- **Format:** Initially JSON (via `serde`), moving towards a custom binary format for performance and complexity.
-- **Rust Concepts:** `File` I/O, Serialization/Deserialization.
+### 3. Execution Engine
+- Processes commands and updates the In-Memory Store.
+- Triggers AOF writes for every "Write" command (SET, LPUSH, etc.).
+- Manages key expiration (TTL).
 
 ---
 
-## 🔄 Data Flow Example: `SET name "Rust"`
+## 🔄 Command Life Cycle
 
-1.  **REPL:** User types `SET name "Rust"`.
-2.  **Parser:** Tokenizes the string and identifies it as a `SET` statement with key=`name` and value=`Rust`.
-3.  **VM:** Receives the `SET` statement and calls `storage_engine.insert("name", "Rust")`.
-4.  **Storage Engine:** Updates its internal `HashMap`.
-5.  **Persistence (Optional/Auto):** If auto-flush is enabled, the Storage Engine serializes the state to `database.db`.
+1.  **Request:** User sends `SET user:1 "Alice"`.
+2.  **Parse:** The parser validates the syntax.
+3.  **Execute:** The Execution Engine updates the `HashMap`.
+4.  **Log:** The `SET` command is appended to `appendonly.aof`.
+5.  **Respond:** "OK" is returned to the user.
 
 ---
 
-## 🛠️ Future Architectural Goals
-- **Buffer Management:** Implementing a cache to keep frequently accessed pages in memory.
-- **B-Tree Indexing:** Moving from a simple `HashMap` or `Vec` to a B-Tree for sorted, efficient disk-based lookups.
-- **Concurrency:** Using `Arc<Mutex<T>>` or `RwLock` to allow multiple readers or writers (Advanced).
+## 🛠️ Implementation Strategy
+- **Phase 1-2:** Focus on single-threaded, synchronous execution for simplicity.
+- **Phase 3-4:** Introduce more complex data structures and basic serialization.
+- **Phase 5-6:** Explore concurrency (handling background saves and multiple clients simultaneously).

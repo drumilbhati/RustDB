@@ -1,82 +1,71 @@
-# RustDB: A Beginner-Friendly Database Engine
+# RustDB: A Beginner-Friendly Redis-like Engine
 
-Welcome to the RustDB project! This project is designed as a learning journey into Rust through the lens of building a functional database engine.
+Welcome to the RustDB project! This project is designed as a learning journey into Rust through the lens of building a functional, high-performance in-memory database with disk persistence—inspired by Redis.
 
 ## Vision
 To build a database that is:
-- **Educational:** Well-documented code that teaches Rust concepts.
-- **Simple:** Minimal dependencies, focusing on standard library features where possible.
-- **Functional:** Capable of storing, retrieving, and querying data reliably.
+- **Fast:** Primary data lives in memory for sub-millisecond access.
+- **Durable:** Changes are persisted to disk so data survives restarts.
+- **Educational:** Learn about Rust's memory safety, concurrency, and network programming.
 
 ---
 
 ## 🗺️ Project Roadmap
 
-### Phase 1: The REPL (Read-Eval-Print Loop)
-Goal: Create an interactive shell to talk to our database.
-- [ ] Initialize the project structure.
-- [ ] Implement a basic input loop.
-- [ ] Add meta-commands (e.g., `.exit`, `.help`).
+### Phase 1: The REPL & Core Commands
+Goal: Create an interactive shell and basic String storage.
+- [ ] Implement the REPL loop.
+- [ ] Implement `SET <key> <value>` and `GET <key>`.
 - [ ] **Micro-plan:**
-    - Study `std::io::stdin`.
-    - Use `match` for command routing.
-    - Implement a "Prompt" that prints `db > `.
+    - Use `HashMap<String, String>` as the primary store.
+    - Implement a basic parser for "SET/GET" commands.
 
-### Phase 2: In-Memory Key-Value Store
-Goal: Implement core logic for storing data in memory.
-- [ ] Define the storage backend (using `HashMap`).
-- [ ] Implement `SET <key> <value>` command.
-- [ ] Implement `GET <key>` command.
+### Phase 2: Persistence - Append Only File (AOF)
+Goal: Ensure every write is logged to disk.
+- [ ] Implement a logger that writes every `SET` command to a file.
+- [ ] Implement a "Replay" mechanism on startup to reconstruct state from the AOF.
 - [ ] **Micro-plan:**
-    - Use `std::collections::HashMap`.
-    - Handle ownership of strings between the parser and storage.
-    - Basic error reporting for missing keys.
+    - Learn about `std::fs::OpenOptions` for appending to files.
+    - Implement a simple line-based protocol for the log.
 
-### Phase 3: Persistence (Disk Storage)
-Goal: Make sure data survives a restart.
-- [ ] Implement a "Flush" mechanism to save to a file.
-- [ ] Load existing data from the file on startup.
-- [ ] Use `Serde` for easy serialization to JSON (initially).
+### Phase 3: Complex Data Types (Lists & Sets)
+Goal: Expand beyond simple strings.
+- [ ] Implement `LPUSH`, `RPUSH`, and `LPOP` for Lists.
+- [ ] Implement `SADD` and `SMEMBERS` for Sets.
 - [ ] **Micro-plan:**
-    - Implement `save_to_disk()` and `load_from_disk()`.
-    - Handle `std::io::Error` gracefully.
-    - Explore `serde_json` for human-readable initial storage.
+    - Use `Enum` for `Value` (String, List, Set).
+    - Use `VecDeque` for Lists and `HashSet` for Sets.
 
-### Phase 4: Structured Data & Tables
-Goal: Move from simple KV to structured "Rows".
-- [ ] Define a `Row` struct with fixed fields (e.g., id, username, email).
-- [ ] Create a `Table` abstraction.
-- [ ] Implement `insert` and `select` for rows.
+### Phase 4: Persistence - Snapshotting (RDB)
+Goal: Save the entire dataset to disk periodically for faster loading.
+- [ ] Implement a background "Save" command.
+- [ ] Binary serialization of the entire memory state.
 - [ ] **Micro-plan:**
-    - Learn about Memory Layout (how rows are stored in memory).
-    - Use `Vec<Row>` or a custom Buffer Manager.
+    - Learn about `serde` and `bincode` for binary serialization.
+    - Explore basic threading (background saving).
 
-### Phase 5: Simple SQL Parser
-Goal: Parse basic SQL statements instead of raw commands.
-- [ ] Implement a tokenizer.
-- [ ] Parse `SELECT`, `INSERT`, `DELETE` statements.
-- [ ] Link the parser to the table execution logic.
+### Phase 5: Expiry & Eviction (TTL)
+Goal: Automatically delete keys after a certain time.
+- [ ] Implement `EXPIRE <key> <seconds>`.
+- [ ] Implement a periodic cleanup task.
 - [ ] **Micro-plan:**
-    - Study basic string parsing patterns in Rust.
-    - Implement an `Enum` to represent supported SQL Statements.
+    - Add a `timestamp` field to stored values.
+    - Learn about `std::time::Instant`.
 
-### Phase 6: Indexing (The B-Tree)
-Goal: Speed up lookups using a B-Tree.
-- [ ] Implement a basic B-Tree structure.
-- [ ] Use the B-Tree to index the Primary Key (ID).
-- [ ] Support range queries (e.g., `id > 10`).
+### Phase 6: Networking (The Server)
+Goal: Turn the REPL into a real server.
+- [ ] Implement a TCP server using `std::net::TcpListener`.
+- [ ] Implement a simple protocol (RESP-lite).
 - [ ] **Micro-plan:**
-    - Learn about B-Tree node splitting and merging.
-    - Implement disk-backed B-Tree nodes.
+    - Learn about multi-threading or async (`tokio`) to handle multiple clients.
 
 ---
 
 ## 🛠️ Tech Stack
 - **Language:** Rust (Stable)
-- **Serialization:** `serde`, `serde_json`
-- **Error Handling:** `thiserror` or `anyhow` (optional, for later)
+- **Data Structures:** `HashMap`, `VecDeque`, `HashSet`
+- **Persistence:** Custom AOF (Text), Bincode (Binary Snapshots)
 
 ## 📖 Learning Resources
-- [The Rust Book](https://doc.rust-lang.org/book/)
-- [Rust by Example](https://doc.rust-lang.org/rust-by-example/)
-- [Database Internals (Book)](https://www.databass.dev/) - Reference for concepts.
+- [Redis Documentation (Command Reference)](https://redis.io/commands)
+- [The Rust Book: Smart Pointers & Concurrency](https://doc.rust-lang.org/book/ch15-00-smart-pointers.html)
